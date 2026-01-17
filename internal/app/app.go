@@ -1,0 +1,70 @@
+package app
+
+import (
+	"chatter/internal/config"
+	"chatter/internal/handler"
+	"chatter/internal/infra"
+	"chatter/internal/repository"
+	"chatter/internal/signaling"
+	"chatter/internal/usecase"
+	"chatter/pkg/middleware"
+	"chatter/pkg/postgres"
+	"context"
+	"net/http"
+
+	"go.uber.org/zap"
+)
+
+func Run(cfg *config.Config, logger *zap.Logger) {
+	pgpool, err := postgres.New(context.Background(), &cfg.Postgres)
+	if err != nil {
+		logger.Fatal("Failed to connect to postgres", zap.Error(err))
+	}
+
+	logger.Info("Connected to postgres")
+
+	authStore := repository.NewAuthRepository(pgpool)
+	authManager := infra.NewJWTManager(cfg.Auth.Secret, cfg.Auth.AccessTTL, cfg.Auth.RefreshTTL)
+	authService := usecase.NewService(authStore, authManager)
+	authHandler := handler.NewHandler(authService)
+
+	registry := signaling.NewRegistry()
+	handler := signaling.NewHandler(registry, authManager, logger)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	mux.HandleFunc("POST /auth/register", authHandler.Register)
+	mux.HandleFunc("POST /auth/login", authHandler.Login)
+
+	mux.Handle("POST /rooms", middleware.RequireAuth(authManager, http.HandlerFunc(handler.CreateRoom)))
+	mux.HandleFunc("GET /ws/", handler.JoinRoom)
+
+	server := &http.Server{
+		Addr:    cfg.Server.Addr,
+		Handler: withCORS(mux),
+	}
+
+	logger.Info("Signaling server started", zap.String("addr", cfg.Server.Addr))
+
+	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		logger.Fatal("Signaling server failed", zap.Error(err))
+	}
+}
+
+func withCORS(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type,Authorization")
+
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}

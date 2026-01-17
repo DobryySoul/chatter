@@ -1,0 +1,14 @@
+server:
+  addr: ":8080"
+auth:
+  secret: "a-string-secret-at-least-256-bits-long"
+  access_ttl: 24h
+  refresh_ttl: 1440h
+postgres:
+  host: chatter-postgres
+  port: 5432
+  username: postgres
+  password: password
+  database: postgres
+  min_conns: 1
+  max_conns: 100

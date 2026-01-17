@@ -1,0 +1,17 @@
+version: "3"
+
+tasks:
+  migrate:up:
+    desc: "Run goose migrations up"
+    cmds:
+      - docker compose run --rm migrate up
+
+  migrate:down:
+    desc: "Rollback last migration"
+    cmds:
+      - docker compose run --rm migrate down
+
+  migrate:status:
+    desc: "Show migration status"
+    cmds:
+      - docker compose run --rm migrate status

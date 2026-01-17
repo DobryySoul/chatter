@@ -1,0 +1,59 @@
+services:
+
+  web:
+    build:
+      context: ./web/
+      dockerfile: Dockerfile
+    ports:
+      - 5173:80
+  chatter:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - 8080:8080
+    environment:
+      - PORT=8080
+    networks:
+      - chatter_default
+
+  chatter-postgres:
+    container_name: chatter-postgres
+    image: postgres:18.0-alpine3.22
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: postgres
+    networks:
+      - chatter_default
+    volumes:
+      - postgres_chatter_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 15s
+      timeout: 15s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile.migrate
+    depends_on:
+      chatter-postgres:
+        condition: service_healthy
+    volumes:
+      - ./:/app
+    working_dir: /app
+    networks:
+      - chatter_default
+
+networks:
+  chatter_default:
+    driver: bridge
+
+volumes:
+  postgres_chatter_data:
