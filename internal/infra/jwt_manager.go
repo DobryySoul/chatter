@@ -1,12 +1,20 @@
 package infra
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 )
+
+type UserClaims struct {
+	jwt.RegisteredClaims
+	UserID   uint64 `json:"user_id"`
+	Username string `json:"username"`
+}
 
 type JWTManager struct {
 	secret     []byte
@@ -15,25 +23,29 @@ type JWTManager struct {
 }
 
 func NewJWTManager(secret string, accessTTL time.Duration, refreshTTL time.Duration) *JWTManager {
-	return &JWTManager{secret: []byte(secret), accessTTL: accessTTL, refreshTTL: refreshTTL}
+	return &JWTManager{
+		secret:     []byte(secret),
+		accessTTL:  accessTTL,
+		refreshTTL: refreshTTL,
+	}
 }
 
-func (m *JWTManager) Generate(userID uint64, username string) (string, error) {
-	claims := jwt.RegisteredClaims{
-		Subject:   username,
-		IssuedAt:  jwt.NewNumericDate(time.Now().UTC()),
-		ExpiresAt: jwt.NewNumericDate(time.Now().UTC().Add(m.accessTTL)),
-		NotBefore: jwt.NewNumericDate(time.Now().UTC()),
-		Issuer:    "chatter",
-		Audience:  jwt.ClaimStrings{"chatter"},
+func (m *JWTManager) GenerateAccessToken(userID uint64, username string) (string, error) {
+	claims := UserClaims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			IssuedAt:  jwt.NewNumericDate(time.Now().UTC()),
+			ExpiresAt: jwt.NewNumericDate(time.Now().UTC().Add(m.accessTTL)),
+		},
+		UserID:   userID,
+		Username: username,
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString(m.secret)
 }
 
-func (m *JWTManager) Parse(tokenString string) (string, error) {
-	parsed, err := jwt.ParseWithClaims(tokenString, &jwt.RegisteredClaims{}, func(t *jwt.Token) (interface{}, error) {
+func (m *JWTManager) ParseAccessToken(tokenString string) (string, uint64, error) {
+	parsed, err := jwt.ParseWithClaims(tokenString, &UserClaims{}, func(t *jwt.Token) (interface{}, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, errors.New("unexpected signing method")
 		}
@@ -41,13 +53,22 @@ func (m *JWTManager) Parse(tokenString string) (string, error) {
 		return m.secret, nil
 	})
 	if err != nil {
-		return "", fmt.Errorf("failed to parse token: %w", err)
+		return "", 0, fmt.Errorf("failed to parse token: %w", err)
 	}
 
-	claims, ok := parsed.Claims.(*jwt.RegisteredClaims)
+	claims, ok := parsed.Claims.(*UserClaims)
 	if !ok || !parsed.Valid {
-		return "", errors.New("invalid token")
+		return "", 0, errors.New("invalid token")
 	}
 
-	return claims.Subject, nil
+	return claims.Username, claims.UserID, nil
+}
+
+func (m *JWTManager) GenerateRefreshToken() (string, error) {
+	b := make([]byte, 32)
+	_, err := rand.Read(b)
+	if err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
 }

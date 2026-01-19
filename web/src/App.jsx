@@ -60,6 +60,23 @@ function saveDisplayName(name) {
   localStorage.setItem(DISPLAY_NAME_KEY, name);
 }
 
+async function tryRefreshToken() {
+  try {
+    const response = await fetch(`${API_BASE}/auth/refresh`, {
+      method: "POST",
+      credentials: "include",
+    });
+    if (response.ok) {
+      const data = await response.json();
+      saveAuth(data.token, data.username);
+      return data;
+    }
+  } catch (err) {
+    // ignore
+  }
+  return null;
+}
+
 function VideoTile({ stream, muted, label }) {
   const ref = useRef(null);
 
@@ -84,10 +101,18 @@ function RegisterPage() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const { token } = readAuth();
-    if (token) {
-      navigate("/dashboard", { replace: true });
+    async function check() {
+      const { token } = readAuth();
+      if (token) {
+        navigate("/dashboard", { replace: true });
+        return;
+      }
+      const data = await tryRefreshToken();
+      if (data) {
+        navigate("/dashboard", { replace: true });
+      }
     }
+    check();
   }, [navigate]);
 
   async function register() {
@@ -96,6 +121,7 @@ function RegisterPage() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ username, password }),
+      credentials: "include",
     });
     if (!response.ok) {
       setAuthError("Registration failed");
@@ -150,10 +176,18 @@ function LoginPage() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const { token } = readAuth();
-    if (token) {
-      navigate("/dashboard", { replace: true });
+    async function check() {
+      const { token } = readAuth();
+      if (token) {
+        navigate("/dashboard", { replace: true });
+        return;
+      }
+      const data = await tryRefreshToken();
+      if (data) {
+        navigate("/dashboard", { replace: true });
+      }
     }
+    check();
   }, [navigate]);
 
   async function login() {
@@ -162,6 +196,7 @@ function LoginPage() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ username, password }),
+      credentials: "include",
     });
     if (!response.ok) {
       setAuthError("Login failed");
@@ -220,14 +255,25 @@ function DashboardPage() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const { token, user } = readAuth();
-    if (token) {
-      setAuthToken(token);
-      setAuthUser(user);
-    } else {
-      navigate("/login", { replace: true });
+    async function init() {
+      let { token, user } = readAuth();
+      if (!token) {
+        const data = await tryRefreshToken();
+        if (data) {
+          token = data.token;
+          user = data.username;
+        }
+      }
+
+      if (token) {
+        setAuthToken(token);
+        setAuthUser(user);
+      } else {
+        navigate("/login", { replace: true });
+      }
+      setDisplayName(readDisplayName());
     }
-    setDisplayName(readDisplayName());
+    init();
   }, [navigate]);
 
   async function createRoom() {
@@ -357,8 +403,24 @@ function DashboardPage() {
 }
 
 function IndexRedirect() {
-  const { token } = readAuth();
-  return <Navigate to={token ? "/dashboard" : "/register"} replace />;
+  const navigate = useNavigate();
+  useEffect(() => {
+    async function check() {
+      const { token } = readAuth();
+      if (token) {
+        navigate("/dashboard", { replace: true });
+        return;
+      }
+      const data = await tryRefreshToken();
+      if (data) {
+        navigate("/dashboard", { replace: true });
+      } else {
+        navigate("/register", { replace: true });
+      }
+    }
+    check();
+  }, [navigate]);
+  return null;
 }
 
 function RoomPage() {

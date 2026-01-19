@@ -18,7 +18,7 @@ type messageBase struct {
 
 type welcomeMessage struct {
 	Type     string `json:"type"`
-	ClientID string `json:"clientId"`
+	ClientID uint64 `json:"clientId"`
 }
 
 type participantsMessage struct {
@@ -29,18 +29,18 @@ type participantsMessage struct {
 type presenceMessage struct {
 	Type     string `json:"type"`
 	Action   string `json:"action"`
-	ClientID string `json:"clientId"`
+	ClientID uint64 `json:"clientId"`
 	TS       string `json:"ts"`
 }
 
 type profileMessage struct {
 	Type        string `json:"type"`
-	ClientID    string `json:"clientId"`
+	ClientID    uint64 `json:"clientId"`
 	DisplayName string `json:"displayName"`
 }
 
 type participantDescriptor struct {
-	ID          string `json:"id"`
+	ID          uint64 `json:"id"`
 	DisplayName string `json:"displayName,omitempty"`
 }
 
@@ -109,14 +109,14 @@ func (r *Room) HandleIncoming(sender *Client, data []byte) {
 		}
 	}
 
-	r.logger.Info("Received message", zap.String("roomID", r.ID()), zap.String("clientID", sender.ID()), zap.String("data", string(data)))
+	r.logger.Info("Received message", zap.String("roomID", r.ID()), zap.Uint64("clientUserID", sender.ID()), zap.String("data", string(data)))
 	r.Broadcast(sender, data)
 }
 
 func (r *Room) run() {
 	clients := make(map[*Client]struct{})
-	participants := make(map[string]struct{})
-	displayNames := make(map[string]string)
+	participants := make(map[uint64]struct{})
+	displayNames := make(map[uint64]string)
 
 	sendToClient := func(client *Client, payload interface{}) {
 		data, err := json.Marshal(payload)

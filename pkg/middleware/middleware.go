@@ -8,14 +8,22 @@ import (
 
 type contextKey string
 
-const userKey contextKey = "authUser"
+const (
+	userKey   contextKey = "authUser"
+	userIDKey contextKey = "authUserID"
+)
 
 type TokenParser interface {
-	Parse(token string) (string, error)
+	ParseAccessToken(token string) (string, uint64, error)
 }
 
 func UserFromContext(ctx context.Context) (string, bool) {
 	value, ok := ctx.Value(userKey).(string)
+	return value, ok
+}
+
+func UserIDFromContext(ctx context.Context) (uint64, bool) {
+	value, ok := ctx.Value(userIDKey).(uint64)
 	return value, ok
 }
 
@@ -33,13 +41,14 @@ func RequireAuth(parser TokenParser, next http.Handler) http.Handler {
 			return
 		}
 
-		username, err := parser.Parse(parts[1])
-		if err != nil || username == "" {
+		username, userID, err := parser.ParseAccessToken(parts[1])
+		if err != nil || username == "" || userID == 0 {
 			http.Error(w, "invalid token", http.StatusUnauthorized)
 			return
 		}
 
 		ctx := context.WithValue(r.Context(), userKey, username)
+		ctx = context.WithValue(ctx, userIDKey, userID)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

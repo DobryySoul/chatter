@@ -12,7 +12,7 @@ import (
 )
 
 type TokenParser interface {
-	Parse(tokenString string) (string, error)
+	ParseAccessToken(tokenString string) (string, uint64, error)
 }
 
 type Handler struct {
@@ -67,25 +67,27 @@ func (h *Handler) JoinRoom(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	clientID := ""
+	var clientName string
+	var clientUserID uint64
 	token := r.URL.Query().Get("token")
 	if token != "" {
-		if sub, err := h.tokenParser.Parse(token); err == nil && sub != "" {
-			clientID = sub
+		if username, userID, err := h.tokenParser.ParseAccessToken(token); err == nil && username != "" && userID != 0 {
+			clientName = username
+			clientUserID = userID
 		}
 	}
 
-	if clientID == "" {
-		clientID = randomID()
+	if clientName == "" {
+		clientName = randomID()
 	}
 
 	room := h.registry.GetOrCreate(roomID)
-	client := NewClient(clientID, conn, room)
+	client := NewClient(clientUserID, clientName, conn, room)
 	room.Register(client)
 
 	client.Run(r.Context())
 
-	h.logger.Info("Client joined room", zap.String("roomID", roomID), zap.String("clientID", client.ID()))
+	h.logger.Info("Client joined room", zap.String("roomID", roomID), zap.Uint64("clientUserID", client.ID()))
 }
 
 func randomID() string {

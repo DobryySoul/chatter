@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"time"
 )
 
 type Handler struct {
@@ -13,8 +14,9 @@ type Handler struct {
 }
 
 type AuthService interface {
-	Register(ctx context.Context, username, password string) (*domain.User, string, error)
-	Login(ctx context.Context, username, password string) (*domain.User, string, error)
+	Register(ctx context.Context, username, password string) (*domain.User, string, string, error)
+	Login(ctx context.Context, username, password string) (string, string, *domain.User, error)
+	RefreshTokens(ctx context.Context, refreshToken string) (string, string, *domain.User, error)
 }
 
 func NewHandler(service AuthService) *Handler {
@@ -27,9 +29,9 @@ type authRequest struct {
 }
 
 type authResponse struct {
-	ID       uint64 `json:"id"`
+	ID       uint64 `json:"id,omitempty"`
 	Token    string `json:"token"`
-	Username string `json:"username"`
+	Username string `json:"username,omitempty"`
 }
 
 func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
@@ -39,7 +41,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, token, err := h.service.Register(r.Context(), req.Username, req.Password)
+	user, accessToken, refreshToken, err := h.service.Register(r.Context(), req.Username, req.Password)
 	if err != nil {
 		switch err {
 		case usecase.ErrEmptyCredentials:
@@ -53,7 +55,12 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, authResponse{ID: user.ID, Token: token, Username: user.Username})
+	h.setRefreshCookie(w, refreshToken)
+	writeJSON(w, authResponse{
+		ID:       user.ID,
+		Token:    accessToken,
+		Username: user.Username,
+	})
 }
 
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
@@ -63,7 +70,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, token, err := h.service.Login(r.Context(), req.Username, req.Password)
+	accessToken, refreshToken, user, err := h.service.Login(r.Context(), req.Username, req.Password)
 	if err != nil {
 		switch err {
 		case usecase.ErrEmptyCredentials:
@@ -76,7 +83,53 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, authResponse{ID: user.ID, Token: token, Username: user.Username})
+	h.setRefreshCookie(w, refreshToken)
+	writeJSON(w, authResponse{
+		ID:       user.ID,
+		Token:    accessToken,
+		Username: user.Username,
+	})
+}
+
+func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
+	cookie, err := r.Cookie("refresh_token")
+	if err != nil {
+		http.Error(w, "missing refresh token", http.StatusUnauthorized)
+		return
+	}
+
+	accessToken, refreshToken, user, err := h.service.RefreshTokens(r.Context(), cookie.Value)
+	if err != nil {
+		// при ошибке сбрасываем куку
+		http.SetCookie(w, &http.Cookie{
+			Name:     "refresh_token",
+			Value:    "",
+			Path:     "/",
+			HttpOnly: true,
+			MaxAge:   -1,
+		})
+		http.Error(w, "invalid refresh token", http.StatusUnauthorized)
+		return
+	}
+
+	h.setRefreshCookie(w, refreshToken)
+	writeJSON(w, authResponse{
+		ID:       user.ID,
+		Token:    accessToken,
+		Username: user.Username,
+	})
+}
+
+func (h *Handler) setRefreshCookie(w http.ResponseWriter, refreshToken string) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     "refresh_token",
+		Value:    refreshToken,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   false,
+		SameSite: http.SameSiteLaxMode,
+		Expires:  time.Now().Add(60 * 24 * time.Hour),
+	})
 }
 
 func writeJSON(w http.ResponseWriter, payload interface{}) {

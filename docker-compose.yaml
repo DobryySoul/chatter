@@ -16,6 +16,8 @@ services:
       - PORT=8080
     networks:
       - chatter_default
+    depends_on:
+      - chatter-postgres
 
   chatter-postgres:
     container_name: chatter-postgres

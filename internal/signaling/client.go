@@ -7,18 +7,20 @@ import (
 )
 
 type Client struct {
-	id   string
-	conn *websocket.Conn
-	room *Room
-	send chan []byte
+	userID   uint64
+	username string
+	conn     *websocket.Conn
+	room     *Room
+	send     chan []byte
 }
 
-func NewClient(id string, conn *websocket.Conn, room *Room) *Client {
+func NewClient(userID uint64, username string, conn *websocket.Conn, room *Room) *Client {
 	return &Client{
-		id:   id,
-		conn: conn,
-		room: room,
-		send: make(chan []byte, 32),
+		userID:   userID,
+		username: username,
+		conn:     conn,
+		room:     room,
+		send:     make(chan []byte, 32),
 	}
 }
 
@@ -43,8 +45,8 @@ func (c *Client) readLoop(ctx context.Context) {
 	}
 }
 
-func (c *Client) ID() string {
-	return c.id
+func (c *Client) ID() uint64 {
+	return c.userID
 }
 
 func (c *Client) writeLoop(ctx context.Context) {

@@ -24,8 +24,9 @@ func Run(cfg *config.Config, logger *zap.Logger) {
 	logger.Info("Connected to postgres")
 
 	authStore := repository.NewAuthRepository(pgpool)
+	tokenStore := repository.NewRefreshTokenRepository(pgpool)
 	authManager := infra.NewJWTManager(cfg.Auth.Secret, cfg.Auth.AccessTTL, cfg.Auth.RefreshTTL)
-	authService := usecase.NewService(authStore, authManager)
+	authService := usecase.NewAuthService(authStore, tokenStore, authManager, cfg.Auth.RefreshTTL)
 	authHandler := handler.NewHandler(authService)
 
 	registry := signaling.NewRegistry()
@@ -38,6 +39,7 @@ func Run(cfg *config.Config, logger *zap.Logger) {
 
 	mux.HandleFunc("POST /auth/register", authHandler.Register)
 	mux.HandleFunc("POST /auth/login", authHandler.Login)
+	mux.HandleFunc("POST /auth/refresh", authHandler.Refresh)
 
 	mux.Handle("POST /rooms", middleware.RequireAuth(authManager, http.HandlerFunc(handler.CreateRoom)))
 	mux.HandleFunc("GET /ws/", handler.JoinRoom)
@@ -56,9 +58,10 @@ func Run(cfg *config.Config, logger *zap.Logger) {
 
 func withCORS(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type,Authorization")
+		w.Header().Set("Access-Control-Allow-Origin", "http://localhost:5173")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		w.Header().Set("Access-Control-Allow-Credentials", "true")
 
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)

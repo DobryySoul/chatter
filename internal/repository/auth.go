@@ -16,7 +16,7 @@ func NewAuthRepository(pg *pgxpool.Pool) *AuthRepository {
 	return &AuthRepository{pg: pg}
 }
 
-func (r *AuthRepository) Create(ctx context.Context, user *domain.User) (*domain.User, error) {
+func (r *AuthRepository) CreateUser(ctx context.Context, user *domain.User) (*domain.User, error) {
 	query := `
 		INSERT INTO users (username, email, password_hash)
 		VALUES ($1, $2, $3)
@@ -35,15 +35,38 @@ func (r *AuthRepository) Create(ctx context.Context, user *domain.User) (*domain
 	return user, nil
 }
 
-func (r *AuthRepository) Get(ctx context.Context, username string) (*domain.User, bool) {
+func (r *AuthRepository) GetUserByUsername(ctx context.Context, username string) (*domain.User, bool) {
 	query := `
 		SELECT id, username, email, password_hash
 		FROM users
 		WHERE username = $1
 	`
+
 	var user domain.User
 
 	row := r.pg.QueryRow(ctx, query, username)
+	if err := row.Scan(
+		&user.ID,
+		&user.Username,
+		&user.Email,
+		&user.PasswordHash,
+	); err != nil {
+		return nil, false
+	}
+
+	return &user, true
+}
+
+func (r *AuthRepository) GetUserByID(ctx context.Context, id uint64) (*domain.User, bool) {
+	query := `
+		SELECT id, username, email, password_hash
+		FROM users
+		WHERE id = $1
+	`
+
+	var user domain.User
+
+	row := r.pg.QueryRow(ctx, query, id)
 	if err := row.Scan(
 		&user.ID,
 		&user.Username,
