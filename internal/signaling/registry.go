@@ -1,18 +1,21 @@
 package signaling
 
 import (
-	"chatter/pkg/logger"
 	"sync"
+
+	"go.uber.org/zap"
 )
 
 type Registry struct {
-	mu    sync.RWMutex
-	rooms map[string]*Room
+	mu     sync.RWMutex
+	rooms  map[string]*Room
+	logger *zap.Logger
 }
 
-func NewRegistry() *Registry {
+func NewRegistry(logger *zap.Logger) *Registry {
 	return &Registry{
-		rooms: make(map[string]*Room),
+		rooms:  make(map[string]*Room),
+		logger: logger,
 	}
 }
 
@@ -30,8 +33,10 @@ func (r *Registry) GetOrCreate(roomID string) *Room {
 		return room
 	}
 
-	room = NewRoom(roomID, r.deleteRoom, logger.Logger)
+	room = NewRoom(roomID, r.deleteRoom, r.logger)
 	r.rooms[roomID] = room
+
+	r.logger.Info("Created room", zap.String("roomID", roomID))
 	return room
 }
 
@@ -39,4 +44,6 @@ func (r *Registry) deleteRoom(roomID string) {
 	r.mu.Lock()
 	delete(r.rooms, roomID)
 	r.mu.Unlock()
+
+	r.logger.Info("Room has been emptied and deleted", zap.String("roomID", roomID))
 }

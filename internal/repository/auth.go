@@ -6,14 +6,19 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.uber.org/zap"
 )
 
 type AuthRepository struct {
-	pg *pgxpool.Pool
+	pg     *pgxpool.Pool
+	logger *zap.Logger
 }
 
-func NewAuthRepository(pg *pgxpool.Pool) *AuthRepository {
-	return &AuthRepository{pg: pg}
+func NewAuthRepository(pg *pgxpool.Pool, logger *zap.Logger) *AuthRepository {
+	return &AuthRepository{
+		pg:     pg,
+		logger: logger,
+	}
 }
 
 func (r *AuthRepository) CreateUser(ctx context.Context, user *domain.User) (*domain.User, error) {
@@ -29,6 +34,7 @@ func (r *AuthRepository) CreateUser(ctx context.Context, user *domain.User) (*do
 		&user.Username,
 		&user.Email,
 	); err != nil {
+		r.logger.Error("Failed to create user", zap.Error(err))
 		return nil, fmt.Errorf("failed to create user: %w", err)
 	}
 
@@ -51,6 +57,7 @@ func (r *AuthRepository) GetUserByUsername(ctx context.Context, username string)
 		&user.Email,
 		&user.PasswordHash,
 	); err != nil {
+		r.logger.Error("Failed to get user by username", zap.Error(err))
 		return nil, false
 	}
 
@@ -73,6 +80,7 @@ func (r *AuthRepository) GetUserByID(ctx context.Context, id uint64) (*domain.Us
 		&user.Email,
 		&user.PasswordHash,
 	); err != nil {
+		r.logger.Error("Failed to get user by ID", zap.Error(err))
 		return nil, false
 	}
 

@@ -67,8 +67,11 @@ func (h *Handler) JoinRoom(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var clientName string
-	var clientUserID uint64
+	var (
+		clientName   string
+		clientUserID uint64
+	)
+
 	token := r.URL.Query().Get("token")
 	if token != "" {
 		if username, userID, err := h.tokenParser.ParseAccessToken(token); err == nil && username != "" && userID != 0 {

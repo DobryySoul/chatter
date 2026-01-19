@@ -7,14 +7,19 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.uber.org/zap"
 )
 
 type RefreshTokenRepository struct {
-	pg *pgxpool.Pool
+	pg     *pgxpool.Pool
+	logger *zap.Logger
 }
 
-func NewRefreshTokenRepository(pg *pgxpool.Pool) *RefreshTokenRepository {
-	return &RefreshTokenRepository{pg: pg}
+func NewRefreshTokenRepository(pg *pgxpool.Pool, logger *zap.Logger) *RefreshTokenRepository {
+	return &RefreshTokenRepository{
+		pg:     pg,
+		logger: logger,
+	}
 }
 
 func (r *RefreshTokenRepository) CreateRefreshTokenByHash(ctx context.Context, token *domain.RefreshToken) error {
@@ -29,6 +34,7 @@ func (r *RefreshTokenRepository) CreateRefreshTokenByHash(ctx context.Context, t
 
 	_, err := r.pg.Exec(ctx, query, token.ID, token.UserID, token.TokenHash, token.ExpiresAt, token.Revoked)
 	if err != nil {
+		r.logger.Error("Failed to create refresh token", zap.Error(err))
 		return fmt.Errorf("failed to create refresh token: %w", err)
 	}
 
@@ -52,6 +58,7 @@ func (r *RefreshTokenRepository) GetRefreshTokenByHash(ctx context.Context, toke
 		&token.UpdatedAt,
 	)
 	if err != nil {
+		r.logger.Error("Failed to get refresh token", zap.Error(err))
 		return nil, fmt.Errorf("failed to get refresh token: %w", err)
 	}
 
@@ -67,6 +74,7 @@ func (r *RefreshTokenRepository) RevokeRefreshToken(ctx context.Context, id stri
 
 	_, err := r.pg.Exec(ctx, query, id)
 	if err != nil {
+		r.logger.Error("Failed to revoke refresh token", zap.Error(err))
 		return fmt.Errorf("failed to revoke refresh token: %w", err)
 	}
 

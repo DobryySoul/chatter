@@ -7,10 +7,13 @@ import (
 	"encoding/json"
 	"net/http"
 	"time"
+
+	"go.uber.org/zap"
 )
 
 type Handler struct {
 	service AuthService
+	logger  *zap.Logger
 }
 
 type AuthService interface {
@@ -19,8 +22,11 @@ type AuthService interface {
 	RefreshTokens(ctx context.Context, refreshToken string) (string, string, *domain.User, error)
 }
 
-func NewHandler(service AuthService) *Handler {
-	return &Handler{service: service}
+func NewHandler(service AuthService, logger *zap.Logger) *Handler {
+	return &Handler{
+		service: service,
+		logger:  logger,
+	}
 }
 
 type authRequest struct {
@@ -55,6 +61,8 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.logger.Info("User registered", zap.String("username", user.Username), zap.Uint64("userID", user.ID))
+
 	h.setRefreshCookie(w, refreshToken)
 	writeJSON(w, authResponse{
 		ID:       user.ID,
@@ -74,14 +82,19 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		switch err {
 		case usecase.ErrEmptyCredentials:
+			h.logger.Error("Missing credentials", zap.Error(err))
 			http.Error(w, "missing credentials", http.StatusBadRequest)
 		case usecase.ErrInvalidCreds:
+			h.logger.Error("Invalid credentials", zap.Error(err))
 			http.Error(w, "invalid credentials", http.StatusUnauthorized)
 		default:
+			h.logger.Error("Failed to login", zap.Error(err))
 			http.Error(w, "failed to login", http.StatusInternalServerError)
 		}
 		return
 	}
+
+	h.logger.Info("User logged in", zap.String("username", user.Username), zap.Uint64("userID", user.ID))
 
 	h.setRefreshCookie(w, refreshToken)
 	writeJSON(w, authResponse{

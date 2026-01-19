@@ -11,6 +11,7 @@ import (
 
 	"chatter/internal/domain"
 
+	"go.uber.org/zap"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -44,14 +45,16 @@ type AuthService struct {
 	tokenStore RefreshTokenRepository
 	tokens     TokenManager
 	refreshTTL time.Duration
+	logger     *zap.Logger
 }
 
-func NewAuthService(authStore AuthRepository, tokenStore RefreshTokenRepository, tokens TokenManager, refreshTTL time.Duration) *AuthService {
+func NewAuthService(authStore AuthRepository, tokenStore RefreshTokenRepository, tokens TokenManager, refreshTTL time.Duration, logger *zap.Logger) *AuthService {
 	return &AuthService{
 		authStore:  authStore,
 		tokenStore: tokenStore,
 		tokens:     tokens,
 		refreshTTL: refreshTTL,
+		logger:     logger,
 	}
 }
 
@@ -63,16 +66,19 @@ func (s *AuthService) Register(ctx context.Context, username, password string) (
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
+		s.logger.Error("Failed to generate password hash", zap.Error(err))
 		return nil, "", "", fmt.Errorf("failed to create user: %w", err)
 	}
 
 	user, err := s.authStore.CreateUser(ctx, &domain.User{Username: username, PasswordHash: hash})
 	if err != nil {
+		s.logger.Error("Failed to create user", zap.Error(err))
 		return nil, "", "", ErrUserExists
 	}
 
 	accessToken, refreshToken, err := s.generateTokens(ctx, user.ID, username)
 	if err != nil {
+		s.logger.Error("Failed to generate tokens", zap.Uint64("userID", user.ID), zap.Error(err))
 		return nil, "", "", fmt.Errorf("failed to generate tokens: %w", err)
 	}
 
@@ -80,22 +86,20 @@ func (s *AuthService) Register(ctx context.Context, username, password string) (
 }
 
 func (s *AuthService) Login(ctx context.Context, username, password string) (string, string, *domain.User, error) {
-	username = strings.TrimSpace(username)
-	if username == "" || password == "" {
-		return "", "", nil, ErrEmptyCredentials
-	}
-
 	user, ok := s.authStore.GetUserByUsername(ctx, username)
 	if !ok {
+		s.logger.Error("User not found", zap.String("username", username))
 		return "", "", nil, ErrInvalidCreds
 	}
 
 	if err := bcrypt.CompareHashAndPassword(user.PasswordHash, []byte(password)); err != nil {
+		s.logger.Error("Invalid credentials", zap.Uint64("userID", user.ID), zap.Error(err))
 		return "", "", nil, ErrInvalidCreds
 	}
 
-	accessToken, refreshToken, err := s.generateTokens(ctx, user.ID, username)
+	accessToken, refreshToken, err := s.generateTokens(ctx, user.ID, user.Username)
 	if err != nil {
+		s.logger.Error("Failed to generate tokens", zap.Uint64("userID", user.ID), zap.Error(err))
 		return "", "", nil, fmt.Errorf("failed to generate tokens: %w", err)
 	}
 
