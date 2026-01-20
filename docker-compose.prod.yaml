@@ -21,11 +21,11 @@ services:
 
   web:
     build:
-      context: .
+      context: ./web
       dockerfile: Dockerfile
     restart: always
-    environment:
-      - VITE_API_URL=https://dockr.ru/api
+    ports:
+      - 5173:80
 
   chatter:
     build:
@@ -36,7 +36,7 @@ services:
       - CONFIG_PATH=/app/config/config.yaml
       - SERVER_ADDR=:8080
       - POSTGRES_HOST=chatter-postgres
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-password}
       - SERVER_CORS_ORIGINS=https://dockr.ru
     depends_on:
       chatter-postgres:
@@ -48,7 +48,7 @@ services:
       dockerfile: Dockerfile.migrate
     environment:
       - POSTGRES_HOST=chatter-postgres
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-password}
     depends_on:
       chatter-postgres:
         condition: service_healthy
@@ -60,7 +60,7 @@ services:
     restart: always
     environment:
       - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-password}
       - POSTGRES_DB=postgres
     volumes:
       - postgres_data:/var/lib/postgresql/data
