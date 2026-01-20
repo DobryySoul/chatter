@@ -7,6 +7,7 @@ type RefreshToken struct {
 	UpdatedAt time.Time
 	ID        string
 	TokenHash string
+	DeviceID  string
 	Revoked   bool
 	UserID    uint64
 }

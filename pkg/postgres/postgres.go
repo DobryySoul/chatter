@@ -8,13 +8,13 @@ import (
 )
 
 type PostgresConfig struct {
-	Host     string `yaml:"host"`
-	Port     uint16 `yaml:"port"`
-	Username string `yaml:"username"`
-	Password string `yaml:"password"`
-	Database string `yaml:"database"`
-	MinConns int32  `yaml:"min_conns"`
-	MaxConns int32  `yaml:"max_conns"`
+	Host     string `yaml:"host" env:"HOST"`
+	Port     uint16 `yaml:"port" env:"PORT"`
+	Username string `yaml:"username" env:"USER"`
+	Password string `yaml:"password" env:"PASSWORD"`
+	Database string `yaml:"database" env:"DB"`
+	MinConns int32  `yaml:"min_conns" env:"MIN_CONNS"`
+	MaxConns int32  `yaml:"max_conns" env:"MAX_CONNS"`
 }
 
 func New(ctx context.Context, config *PostgresConfig) (*pgxpool.Pool, error) {

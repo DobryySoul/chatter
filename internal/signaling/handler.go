@@ -84,13 +84,16 @@ func (h *Handler) JoinRoom(w http.ResponseWriter, r *http.Request) {
 		clientName = randomID()
 	}
 
-	room := h.registry.GetOrCreate(roomID)
+	room := h.registry.GetOrCreate(r.Context(), roomID, clientUserID)
+	if room == nil {
+		h.logger.Error("Failed to get or create room", zap.String("roomID", roomID))
+		return
+	}
+
 	client := NewClient(clientUserID, clientName, conn, room)
 	room.Register(client)
 
 	client.Run(r.Context())
-
-	h.logger.Info("Client joined room", zap.String("roomID", roomID), zap.Uint64("clientUserID", client.ID()))
 }
 
 func randomID() string {

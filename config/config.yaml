@@ -1,5 +1,6 @@
 server:
   addr: ":8080"
+  cors_origins: ["http://localhost:5173"]
 auth:
   secret: "a-string-secret-at-least-256-bits-long"
   access_ttl: 24h

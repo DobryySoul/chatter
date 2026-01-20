@@ -40,13 +40,14 @@ func Run(cfg *config.Config, logger *zap.Logger) {
 	mux.HandleFunc("POST /auth/register", authHandler.Register)
 	mux.HandleFunc("POST /auth/login", authHandler.Login)
 	mux.HandleFunc("POST /auth/refresh", authHandler.Refresh)
+	mux.HandleFunc("POST /auth/logout", authHandler.Logout)
 
 	mux.Handle("POST /rooms", middleware.RequireAuth(authManager, http.HandlerFunc(signalingHandler.CreateRoom)))
 	mux.HandleFunc("GET /ws/", signalingHandler.JoinRoom)
 
 	server := &http.Server{
 		Addr:    cfg.Server.Addr,
-		Handler: withCORS(mux),
+		Handler: withCORS(mux, cfg.Server.CorsOrigins),
 	}
 
 	logger.Info("Signaling server started", zap.String("addr", cfg.Server.Addr))
@@ -56,11 +57,25 @@ func Run(cfg *config.Config, logger *zap.Logger) {
 	}
 }
 
-func withCORS(next http.Handler) http.Handler {
+func withCORS(next http.Handler, allowedOrigins []string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "http://localhost:5173")
+		origin := r.Header.Get("Origin")
+		allow := false
+		for _, o := range allowedOrigins {
+			if o == origin {
+				allow = true
+				break
+			}
+		}
+
+		if allow {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+		} else if len(allowedOrigins) > 0 {
+			w.Header().Set("Access-Control-Allow-Origin", allowedOrigins[0])
+		}
+
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Device-ID")
 		w.Header().Set("Access-Control-Allow-Credentials", "true")
 
 		if r.Method == http.MethodOptions {

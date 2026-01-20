@@ -17,8 +17,8 @@ type Handler struct {
 }
 
 type AuthService interface {
-	Register(ctx context.Context, username, password string) (*domain.User, string, string, error)
-	Login(ctx context.Context, username, password string) (string, string, *domain.User, error)
+	Register(ctx context.Context, username, password, deviceID string) (*domain.User, string, string, error)
+	Login(ctx context.Context, username, password, deviceID string) (string, string, *domain.User, error)
 	RefreshTokens(ctx context.Context, refreshToken string) (string, string, *domain.User, error)
 }
 
@@ -47,7 +47,8 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, accessToken, refreshToken, err := h.service.Register(r.Context(), req.Username, req.Password)
+	deviceID := r.Header.Get("X-Device-ID")
+	user, accessToken, refreshToken, err := h.service.Register(r.Context(), req.Username, req.Password, deviceID)
 	if err != nil {
 		switch err {
 		case usecase.ErrEmptyCredentials:
@@ -78,7 +79,9 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	accessToken, refreshToken, user, err := h.service.Login(r.Context(), req.Username, req.Password)
+	deviceID := r.Header.Get("X-Device-ID")
+
+	accessToken, refreshToken, user, err := h.service.Login(r.Context(), req.Username, req.Password, deviceID)
 	if err != nil {
 		switch err {
 		case usecase.ErrEmptyCredentials:
@@ -102,6 +105,18 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		Token:    accessToken,
 		Username: user.Username,
 	})
+}
+
+func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     "refresh_token",
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		MaxAge:   -1,
+	})
+
+	w.WriteHeader(http.StatusOK)
 }
 
 func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
