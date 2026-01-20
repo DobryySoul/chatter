@@ -8,19 +8,20 @@ import (
 )
 
 type Config struct {
-	Postgres postgres.PostgresConfig `yaml:"postgres"`
-	Server   ServerConfig            `yaml:"server"`
-	Auth     AuthConfig              `yaml:"auth"`
+	Postgres postgres.PostgresConfig `yaml:"postgres" env-prefix:"POSTGRES_"`
+	Server   ServerConfig            `yaml:"server" env-prefix:"SERVER_"`
+	Auth     AuthConfig              `yaml:"auth" env-prefix:"AUTH_"`
 }
 
 type ServerConfig struct {
-	Addr string `yaml:"addr"`
+	Addr        string   `yaml:"addr" env:"ADDR"`
+	CorsOrigins []string `yaml:"cors_origins" env:"CORS_ORIGINS" env-separator:","`
 }
 
 type AuthConfig struct {
-	AccessTTL  time.Duration `yaml:"access_ttl"`
-	RefreshTTL time.Duration `yaml:"refresh_ttl"`
-	Secret     string        `yaml:"secret"`
+	AccessTTL  time.Duration `yaml:"access_ttl" env:"ACCESS_TTL"`
+	RefreshTTL time.Duration `yaml:"refresh_ttl" env:"REFRESH_TTL"`
+	Secret     string        `yaml:"secret" env:"SECRET"`
 }
 
 func Load() *Config {
@@ -34,7 +35,14 @@ func Load() *Config {
 
 func defaultConfig() *Config {
 	return &Config{
-		Server: ServerConfig{Addr: ":8080"},
-		Auth:   AuthConfig{Secret: "a-string-secret-at-least-256-bits-long", AccessTTL: 24 * time.Hour, RefreshTTL: 1440 * time.Hour},
+		Server: ServerConfig{
+			Addr:        ":8080",
+			CorsOrigins: []string{"http://localhost:5173"},
+		},
+		Auth: AuthConfig{
+			Secret:     "a-string-secret-at-least-256-bits-long",
+			AccessTTL:  24 * time.Hour,
+			RefreshTTL: 1440 * time.Hour,
+		},
 	}
 }

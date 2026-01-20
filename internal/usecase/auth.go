@@ -32,6 +32,7 @@ type RefreshTokenRepository interface {
 	CreateRefreshTokenByHash(ctx context.Context, token *domain.RefreshToken) error
 	GetRefreshTokenByHash(ctx context.Context, tokenHash string) (*domain.RefreshToken, error)
 	RevokeRefreshToken(ctx context.Context, id string) error
+	RevokeUserDeviceTokens(ctx context.Context, userID uint64, deviceID string) error
 }
 
 type TokenManager interface {
@@ -58,7 +59,7 @@ func NewAuthService(authStore AuthRepository, tokenStore RefreshTokenRepository,
 	}
 }
 
-func (s *AuthService) Register(ctx context.Context, username, password string) (*domain.User, string, string, error) {
+func (s *AuthService) Register(ctx context.Context, username, password, deviceID string) (*domain.User, string, string, error) {
 	username = strings.TrimSpace(username)
 	if username == "" || password == "" {
 		return nil, "", "", ErrEmptyCredentials
@@ -76,7 +77,7 @@ func (s *AuthService) Register(ctx context.Context, username, password string) (
 		return nil, "", "", ErrUserExists
 	}
 
-	accessToken, refreshToken, err := s.generateTokens(ctx, user.ID, username)
+	accessToken, refreshToken, err := s.generateTokens(ctx, user.ID, username, deviceID)
 	if err != nil {
 		s.logger.Error("Failed to generate tokens", zap.Uint64("userID", user.ID), zap.Error(err))
 		return nil, "", "", fmt.Errorf("failed to generate tokens: %w", err)
@@ -85,7 +86,7 @@ func (s *AuthService) Register(ctx context.Context, username, password string) (
 	return user, accessToken, refreshToken, nil
 }
 
-func (s *AuthService) Login(ctx context.Context, username, password string) (string, string, *domain.User, error) {
+func (s *AuthService) Login(ctx context.Context, username, password, deviceID string) (string, string, *domain.User, error) {
 	user, ok := s.authStore.GetUserByUsername(ctx, username)
 	if !ok {
 		s.logger.Error("User not found", zap.String("username", username))
@@ -97,7 +98,7 @@ func (s *AuthService) Login(ctx context.Context, username, password string) (str
 		return "", "", nil, ErrInvalidCreds
 	}
 
-	accessToken, refreshToken, err := s.generateTokens(ctx, user.ID, user.Username)
+	accessToken, refreshToken, err := s.generateTokens(ctx, user.ID, user.Username, deviceID)
 	if err != nil {
 		s.logger.Error("Failed to generate tokens", zap.Uint64("userID", user.ID), zap.Error(err))
 		return "", "", nil, fmt.Errorf("failed to generate tokens: %w", err)
@@ -131,15 +132,21 @@ func (s *AuthService) RefreshTokens(ctx context.Context, refreshToken string) (s
 		return "", "", nil, ErrInvalidToken
 	}
 
-	accessToken, newRefreshToken, err := s.generateTokens(ctx, user.ID, user.Username)
+	accessToken, newRefreshToken, err := s.generateTokens(ctx, user.ID, user.Username, token.DeviceID)
 	if err != nil {
-		return "", "", nil, fmt.Errorf("")
+		return "", "", nil, fmt.Errorf("failed to generate tokens: %w", err)
 	}
 
 	return accessToken, newRefreshToken, user, nil
 }
 
-func (s *AuthService) generateTokens(ctx context.Context, userID uint64, username string) (string, string, error) {
+func (s *AuthService) generateTokens(ctx context.Context, userID uint64, username, deviceID string) (string, string, error) {
+	if deviceID != "" {
+		if err := s.tokenStore.RevokeUserDeviceTokens(ctx, userID, deviceID); err != nil {
+			s.logger.Warn("Failed to revoke old device tokens", zap.Error(err))
+		}
+	}
+
 	accessToken, err := s.tokens.GenerateAccessToken(userID, username)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to generate access token: %w", err)
@@ -158,6 +165,7 @@ func (s *AuthService) generateTokens(ctx context.Context, userID uint64, usernam
 		TokenHash: refreshTokenHash,
 		ExpiresAt: expiresAt,
 		Revoked:   false,
+		DeviceID:  deviceID,
 	})
 	if err != nil {
 		return "", "", fmt.Errorf("failed to store refresh token: %w", err)

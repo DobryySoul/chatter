@@ -28,14 +28,30 @@ func (r *RefreshTokenRepository) CreateRefreshTokenByHash(ctx context.Context, t
 	}
 
 	query := `
-		INSERT INTO refresh_tokens (id, user_id, token_hash, expires_at, revoked)
-		VALUES ($1, $2, $3, $4, $5)
+		INSERT INTO refresh_tokens (id, user_id, token_hash, expires_at, revoked, device_id)
+		VALUES ($1, $2, $3, $4, $5, $6)
 	`
 
-	_, err := r.pg.Exec(ctx, query, token.ID, token.UserID, token.TokenHash, token.ExpiresAt, token.Revoked)
+	_, err := r.pg.Exec(ctx, query, token.ID, token.UserID, token.TokenHash, token.ExpiresAt, token.Revoked, token.DeviceID)
 	if err != nil {
 		r.logger.Error("Failed to create refresh token", zap.Error(err))
 		return fmt.Errorf("failed to create refresh token: %w", err)
+	}
+
+	return nil
+}
+
+func (r *RefreshTokenRepository) RevokeUserDeviceTokens(ctx context.Context, userID uint64, deviceID string) error {
+	query := `
+		UPDATE refresh_tokens
+		SET revoked = true, updated_at = now()
+		WHERE user_id = $1 AND device_id = $2 AND revoked = false
+	`
+
+	_, err := r.pg.Exec(ctx, query, userID, deviceID)
+	if err != nil {
+		r.logger.Error("Failed to revoke user device tokens", zap.Error(err))
+		return fmt.Errorf("failed to revoke user device tokens: %w", err)
 	}
 
 	return nil

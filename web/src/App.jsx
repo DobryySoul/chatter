@@ -4,6 +4,7 @@ import {
   Navigate,
   Route,
   Routes,
+  useLocation,
   useNavigate,
   useParams,
 } from "react-router-dom";
@@ -29,6 +30,17 @@ function randomId() {
   return Math.random().toString(36).slice(2, 10);
 }
 
+const DEVICE_ID_KEY = "deviceId";
+
+function getDeviceId() {
+  let deviceId = localStorage.getItem(DEVICE_ID_KEY);
+  if (!deviceId) {
+    deviceId = randomId() + randomId();
+    localStorage.setItem(DEVICE_ID_KEY, deviceId);
+  }
+  return deviceId;
+}
+
 function buildWsUrl(serverUrl, roomId, token) {
   const wsBase = serverUrl.replace(/^http/, "ws");
   const url = `${wsBase}/ws/${roomId}`;
@@ -50,6 +62,18 @@ function saveAuth(token, user) {
 function clearAuth() {
   localStorage.removeItem(AUTH_TOKEN_KEY);
   localStorage.removeItem(AUTH_USER_KEY);
+}
+
+async function logout() {
+  try {
+    await fetch(`${API_BASE}/auth/logout`, {
+      method: "POST",
+      credentials: "include",
+    });
+  } catch (err) {
+    // ignore
+  }
+  clearAuth();
 }
 
 function readDisplayName() {
@@ -99,9 +123,13 @@ function RegisterPage() {
   const [password, setPassword] = useState("");
   const [authError, setAuthError] = useState("");
   const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
     async function check() {
+      if (location.state?.loggedOut) {
+        return;
+      }
       const { token } = readAuth();
       if (token) {
         navigate("/dashboard", { replace: true });
@@ -113,13 +141,16 @@ function RegisterPage() {
       }
     }
     check();
-  }, [navigate]);
+  }, [navigate, location]);
 
   async function register() {
     setAuthError("");
     const response = await fetch(`${API_BASE}/auth/register`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "X-Device-ID": getDeviceId(),
+      },
       body: JSON.stringify({ username, password }),
       credentials: "include",
     });
@@ -174,9 +205,13 @@ function LoginPage() {
   const [password, setPassword] = useState("");
   const [authError, setAuthError] = useState("");
   const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
     async function check() {
+      if (location.state?.loggedOut) {
+        return;
+      }
       const { token } = readAuth();
       if (token) {
         navigate("/dashboard", { replace: true });
@@ -188,13 +223,16 @@ function LoginPage() {
       }
     }
     check();
-  }, [navigate]);
+  }, [navigate, location]);
 
   async function login() {
     setAuthError("");
     const response = await fetch(`${API_BASE}/auth/login`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "X-Device-ID": getDeviceId(),
+      },
       body: JSON.stringify({ username, password }),
       credentials: "include",
     });
@@ -339,8 +377,7 @@ function DashboardPage() {
           <button
             className="ghost"
             onClick={() => {
-              clearAuth();
-              navigate("/login");
+              logout().then(() => navigate("/login", { state: { loggedOut: true } }));
             }}
           >
             Logout

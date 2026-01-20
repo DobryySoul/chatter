@@ -1,6 +1,7 @@
 package signaling
 
 import (
+	"context"
 	"sync"
 
 	"go.uber.org/zap"
@@ -19,24 +20,29 @@ func NewRegistry(logger *zap.Logger) *Registry {
 	}
 }
 
-func (r *Registry) GetOrCreate(roomID string) *Room {
+func (r *Registry) GetOrCreate(ctx context.Context, roomID string, userID uint64) *Room {
+	logger := r.logger.With(zap.String("roomID", roomID), zap.Uint64("userID", userID))
+
 	r.mu.RLock()
 	room, ok := r.rooms[roomID]
 	r.mu.RUnlock()
 	if ok {
+		logger.Info("Room already exists")
 		return room
 	}
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if room, ok = r.rooms[roomID]; ok {
+		logger.Info("Room already exists")
 		return room
 	}
 
 	room = NewRoom(roomID, r.deleteRoom, r.logger)
 	r.rooms[roomID] = room
 
-	r.logger.Info("Created room", zap.String("roomID", roomID))
+	logger.Info("Created room")
+
 	return room
 }
 

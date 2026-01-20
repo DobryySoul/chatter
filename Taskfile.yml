@@ -1,6 +1,14 @@
 version: "3"
 
 tasks:
+  dev:up:
+    desc: "Start development environment"
+    cmds:
+      - docker compose up -d --build
+  dev:down:
+    desc: "Stop development environment"
+    cmds:
+      - docker compose down -v
   migrate:up:
     desc: "Run goose migrations up"
     cmds:
