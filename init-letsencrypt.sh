@@ -11,7 +11,7 @@ fi
 
 echo "Using command: $DOCKER_COMPOSE"
 
-domains=(dockr.ru www.dockr.ru)
+domains=(dockr.ru)
 rsa_key_size=4096
 data_path="./certbot"
 email="developerinspb@gmail.com"
