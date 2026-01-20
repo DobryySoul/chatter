@@ -44,8 +44,13 @@ $DOCKER_COMPOSE -f docker-compose.prod.yaml run --rm --entrypoint "\
 echo
 
 
-echo "### Starting nginx ..."
-$DOCKER_COMPOSE -f docker-compose.prod.yaml up --force-recreate -d nginx
+echo "### Starting nginx (with init config) ..."
+$DOCKER_COMPOSE -f docker-compose.prod.yaml -f <(echo "
+services:
+  nginx:
+    volumes:
+      - ./nginx/init.conf:/etc/nginx/conf.d/default.conf
+") up --force-recreate -d nginx
 echo
 
 echo "### Deleting dummy certificate ..."
@@ -81,5 +86,6 @@ $DOCKER_COMPOSE -f docker-compose.prod.yaml run --rm --entrypoint "\
     --force-renewal" certbot
 echo
 
-echo "### Reloading nginx ..."
-$DOCKER_COMPOSE -f docker-compose.prod.yaml exec nginx nginx -s reload
+echo "### Stopping nginx ..."
+$DOCKER_COMPOSE -f docker-compose.prod.yaml stop nginx
+echo
