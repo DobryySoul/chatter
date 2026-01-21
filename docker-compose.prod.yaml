@@ -12,12 +12,16 @@ services:
     depends_on:
       - web
       - chatter
+    networks:
+      - chatter_default
 
   certbot:
     image: certbot/certbot
     volumes:
       - ./certbot/conf:/etc/letsencrypt
       - ./certbot/www:/var/www/certbot
+    networks:
+      - chatter_default
 
   web:
     build:
@@ -26,6 +30,8 @@ services:
     restart: always
     ports:
       - 5173:80
+    networks:
+      - chatter_default
 
   chatter:
     build:
@@ -41,6 +47,8 @@ services:
     depends_on:
       chatter-postgres:
         condition: service_healthy
+    networks:
+      - chatter_default
 
   migrate:
     build:
@@ -53,6 +61,8 @@ services:
       chatter-postgres:
         condition: service_healthy
     command: ["up"]
+    networks:
+      - chatter_default
 
   chatter-postgres:
     container_name: chatter-postgres
@@ -69,6 +79,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - chatter_default
 
 networks:
   chatter_default:
