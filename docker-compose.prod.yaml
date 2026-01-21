@@ -70,5 +70,9 @@ services:
       timeout: 5s
       retries: 5
 
+networks:
+  chatter_default:
+    driver: bridge
+
 volumes:
   postgres_data:
