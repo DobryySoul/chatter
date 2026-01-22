@@ -1,0 +1,90 @@
+services:
+  nginx:
+    image: nginx:1.27-alpine
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/prod.conf:/etc/nginx/conf.d/default.conf
+      - ./certbot/conf:/etc/letsencrypt
+      - ./certbot/www:/var/www/certbot
+    depends_on:
+      - web
+      - chatter
+    networks:
+      - chatter_default
+
+  certbot:
+    image: certbot/certbot
+    volumes:
+      - ./certbot/conf:/etc/letsencrypt
+      - ./certbot/www:/var/www/certbot
+    networks:
+      - chatter_default
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    restart: always
+    ports:
+      - 5173:80
+    networks:
+      - chatter_default
+
+  chatter:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: always
+    environment:
+      - CONFIG_PATH=/app/config/config.yaml
+      - SERVER_ADDR=:8080
+      - POSTGRES_HOST=chatter-postgres
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-password}
+      - SERVER_CORS_ORIGINS=https://dockr.ru
+    depends_on:
+      chatter-postgres:
+        condition: service_healthy
+    networks:
+      - chatter_default
+
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile.migrate
+    environment:
+      - POSTGRES_HOST=chatter-postgres
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-password}
+    depends_on:
+      chatter-postgres:
+        condition: service_healthy
+    command: ["up"]
+    networks:
+      - chatter_default
+
+  chatter-postgres:
+    container_name: chatter-postgres
+    image: postgres:18.0-alpine3.22
+    restart: always
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-password}
+      - POSTGRES_DB=postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - chatter_default
+
+networks:
+  chatter_default:
+    driver: bridge
+
+volumes:
+  postgres_data:

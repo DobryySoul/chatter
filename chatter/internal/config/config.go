@@ -3,6 +3,7 @@ package config
 import (
 	"chatter/pkg/postgres"
 	"chatter/pkg/redis"
+	"os"
 	"time"
 
 	"github.com/ilyakaznacheev/cleanenv"
@@ -28,8 +29,15 @@ type AuthConfig struct {
 
 func Load() *Config {
 	var cfg Config
-	if err := cleanenv.ReadConfig("config/config.yaml", &cfg); err != nil {
-		return defaultConfig()
+	configPath := os.Getenv("CONFIG_PATH")
+	if configPath == "" {
+		configPath = "config/config.yaml"
+	}
+
+	if err := cleanenv.ReadConfig(configPath, &cfg); err != nil {
+		if err := cleanenv.ReadEnv(&cfg); err != nil {
+			return defaultConfig()
+		}
 	}
 
 	return &cfg
