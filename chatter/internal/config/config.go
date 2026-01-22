@@ -2,6 +2,7 @@ package config
 
 import (
 	"chatter/pkg/postgres"
+	"chatter/pkg/redis"
 	"time"
 
 	"github.com/ilyakaznacheev/cleanenv"
@@ -9,6 +10,7 @@ import (
 
 type Config struct {
 	Postgres postgres.PostgresConfig `yaml:"postgres" env-prefix:"POSTGRES_"`
+	Redis    redis.RedisConfig       `yaml:"redis" env-prefix:"REDIS_"`
 	Server   ServerConfig            `yaml:"server" env-prefix:"SERVER_"`
 	Auth     AuthConfig              `yaml:"auth" env-prefix:"AUTH_"`
 }

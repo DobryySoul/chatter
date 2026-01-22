@@ -1,0 +1,17 @@
+global:
+  scrape_interval: 10s
+  evaluation_interval: 10s
+
+rule_files:
+  # - "alerts.rules"
+
+scrape_configs:
+  - job_name: 'chatter'
+    scheme: http
+    static_configs:
+      - targets: ['chatter:8000']
+    basic_auth:
+      username: admin
+      password: '{N#QIA8KWJkyK5'
+    metrics_path: /metrics
+    scrape_interval: 10s

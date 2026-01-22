@@ -9,19 +9,32 @@ import (
 	"chatter/internal/usecase"
 	"chatter/pkg/middleware"
 	"chatter/pkg/postgres"
+	"chatter/pkg/redis"
 	"context"
 	"net/http"
 
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"go.opentelemetry.io/otel"
 	"go.uber.org/zap"
 )
 
-func Run(cfg *config.Config, logger *zap.Logger) {
-	pgpool, err := postgres.New(context.Background(), &cfg.Postgres)
+func Run(ctx context.Context, cfg *config.Config, logger *zap.Logger) {
+	pgpool, err := postgres.New(ctx, &cfg.Postgres)
 	if err != nil {
 		logger.Fatal("Failed to connect to postgres", zap.Error(err))
 	}
 
 	logger.Info("Connected to postgres")
+
+	rdb, err := redis.NewClient(ctx, &cfg.Redis)
+	if err != nil {
+		logger.Fatal("Failed to connect to redis", zap.Error(err))
+	}
+
+	// заглушка, redis пока что не используется
+	_ = rdb
+
+	logger.Info("Connected to redis")
 
 	authStore := repository.NewAuthRepository(pgpool, logger)
 	tokenStore := repository.NewRefreshTokenRepository(pgpool, logger)
@@ -36,18 +49,26 @@ func Run(cfg *config.Config, logger *zap.Logger) {
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
+	mux.Handle("GET /metrics", promhttp.Handler())
 
 	mux.HandleFunc("POST /auth/register", authHandler.Register)
 	mux.HandleFunc("POST /auth/login", authHandler.Login)
 	mux.HandleFunc("POST /auth/refresh", authHandler.Refresh)
 	mux.HandleFunc("POST /auth/logout", authHandler.Logout)
+	mux.Handle("GET /auth/sessions", middleware.RequireAuth(authManager, http.HandlerFunc(authHandler.Sessions)))
 
 	mux.Handle("POST /rooms", middleware.RequireAuth(authManager, http.HandlerFunc(signalingHandler.CreateRoom)))
 	mux.HandleFunc("GET /ws/", signalingHandler.JoinRoom)
 
 	server := &http.Server{
-		Addr:    cfg.Server.Addr,
-		Handler: withCORS(mux, cfg.Server.CorsOrigins),
+		Addr: cfg.Server.Addr,
+		Handler: middleware.WithTracing(
+			middleware.WithRequestLogging(
+				middleware.WithMetrics(middleware.WithCORS(mux, cfg.Server.CorsOrigins)),
+				logger,
+			),
+			otel.Tracer("chatter/http"),
+		),
 	}
 
 	logger.Info("Signaling server started", zap.String("addr", cfg.Server.Addr))
@@ -55,34 +76,4 @@ func Run(cfg *config.Config, logger *zap.Logger) {
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		logger.Fatal("Signaling server failed", zap.Error(err))
 	}
-}
-
-func withCORS(next http.Handler, allowedOrigins []string) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		origin := r.Header.Get("Origin")
-		allow := false
-		for _, o := range allowedOrigins {
-			if o == origin {
-				allow = true
-				break
-			}
-		}
-
-		if allow {
-			w.Header().Set("Access-Control-Allow-Origin", origin)
-		} else if len(allowedOrigins) > 0 {
-			w.Header().Set("Access-Control-Allow-Origin", allowedOrigins[0])
-		}
-
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Device-ID")
-		w.Header().Set("Access-Control-Allow-Credentials", "true")
-
-		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
-
-		next.ServeHTTP(w, r)
-	})
 }

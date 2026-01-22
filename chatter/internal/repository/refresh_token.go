@@ -96,3 +96,43 @@ func (r *RefreshTokenRepository) RevokeRefreshToken(ctx context.Context, id stri
 
 	return nil
 }
+
+func (r *RefreshTokenRepository) ListActiveSessions(ctx context.Context, userID uint64) ([]domain.RefreshToken, error) {
+	query := `
+		SELECT id, user_id, expires_at, revoked, updated_at, device_id
+		FROM refresh_tokens
+		WHERE user_id = $1 AND revoked = false AND expires_at > now()
+		ORDER BY updated_at DESC
+	`
+
+	rows, err := r.pg.Query(ctx, query, userID)
+	if err != nil {
+		r.logger.Error("Failed to list sessions", zap.Error(err))
+		return nil, fmt.Errorf("failed to list sessions: %w", err)
+	}
+	defer rows.Close()
+
+	var sessions []domain.RefreshToken
+	for rows.Next() {
+		var token domain.RefreshToken
+		if err := rows.Scan(
+			&token.ID,
+			&token.UserID,
+			&token.ExpiresAt,
+			&token.Revoked,
+			&token.UpdatedAt,
+			&token.DeviceID,
+		); err != nil {
+			r.logger.Error("Failed to scan session", zap.Error(err))
+			return nil, fmt.Errorf("failed to scan session: %w", err)
+		}
+		sessions = append(sessions, token)
+	}
+
+	if err := rows.Err(); err != nil {
+		r.logger.Error("Failed to read sessions", zap.Error(err))
+		return nil, fmt.Errorf("failed to read sessions: %w", err)
+	}
+
+	return sessions, nil
+}

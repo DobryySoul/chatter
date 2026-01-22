@@ -33,6 +33,7 @@ type RefreshTokenRepository interface {
 	GetRefreshTokenByHash(ctx context.Context, tokenHash string) (*domain.RefreshToken, error)
 	RevokeRefreshToken(ctx context.Context, id string) error
 	RevokeUserDeviceTokens(ctx context.Context, userID uint64, deviceID string) error
+	ListActiveSessions(ctx context.Context, userID uint64) ([]domain.RefreshToken, error)
 }
 
 type TokenManager interface {
@@ -138,6 +139,14 @@ func (s *AuthService) RefreshTokens(ctx context.Context, refreshToken string) (s
 	}
 
 	return accessToken, newRefreshToken, user, nil
+}
+
+func (s *AuthService) ListActiveSessions(ctx context.Context, userID uint64) ([]domain.RefreshToken, error) {
+	if userID == 0 {
+		return nil, ErrInvalidToken
+	}
+
+	return s.tokenStore.ListActiveSessions(ctx, userID)
 }
 
 func (s *AuthService) generateTokens(ctx context.Context, userID uint64, username, deviceID string) (string, string, error) {

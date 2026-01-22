@@ -290,7 +290,11 @@ function DashboardPage() {
   const [authError, setAuthError] = useState("");
   const [authUser, setAuthUser] = useState("");
   const [authToken, setAuthToken] = useState("");
+  const [sessions, setSessions] = useState([]);
+  const [sessionsError, setSessionsError] = useState("");
+  const [sessionsLoading, setSessionsLoading] = useState(false);
   const navigate = useNavigate();
+  const deviceId = getDeviceId();
 
   useEffect(() => {
     async function init() {
@@ -313,6 +317,48 @@ function DashboardPage() {
     }
     init();
   }, [navigate]);
+
+  async function loadSessions() {
+    if (!authToken) {
+      return;
+    }
+    setSessionsLoading(true);
+    setSessionsError("");
+    try {
+      const response = await fetch(`${serverUrl}/auth/sessions`, {
+        headers: {
+          Authorization: authToken ? `Bearer ${authToken}` : "",
+        },
+      });
+      if (!response.ok) {
+        setSessions([]);
+        setSessionsError("Failed to load sessions");
+        return;
+      }
+      const data = await response.json();
+      setSessions(Array.isArray(data) ? data : []);
+    } catch (err) {
+      setSessions([]);
+      setSessionsError("Failed to load sessions");
+    } finally {
+      setSessionsLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadSessions();
+  }, [authToken, serverUrl]);
+
+  function formatSessionTime(value) {
+    if (!value) {
+      return "unknown";
+    }
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return "unknown";
+    }
+    return date.toLocaleString();
+  }
 
   async function createRoom() {
     const response = await fetch(`${serverUrl}/rooms`, {
@@ -384,6 +430,45 @@ function DashboardPage() {
           </button>
         </div>
         {authError && <div className="error">{authError}</div>}
+
+        <div className="sessions">
+          <div className="sessions-header">
+            <div className="sessions-title">Active sessions</div>
+            <button
+              className="ghost small"
+              onClick={loadSessions}
+              disabled={sessionsLoading || !authToken}
+            >
+              Refresh
+            </button>
+          </div>
+          {sessionsLoading && <div className="muted">Loading sessions...</div>}
+          {sessionsError && <div className="error">{sessionsError}</div>}
+          {!sessionsLoading && !sessionsError && sessions.length === 0 && (
+            <div className="empty">No active sessions</div>
+          )}
+          {sessions.length > 0 && (
+            <div className="sessions-list">
+              {sessions.map((session) => {
+                const isCurrent = session.deviceId === deviceId;
+                return (
+                  <div key={session.id} className="session-item">
+                    <div className="session-main">
+                      <div className="session-device">
+                        {session.deviceId || "unknown device"}
+                        {isCurrent && <span className="badge-current">Current device</span>}
+                      </div>
+                      <div className="session-meta">
+                        <span>Last seen: {formatSessionTime(session.lastSeen)}</span>
+                        <span>Expires: {formatSessionTime(session.expiresAt)}</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
 
         <div className="field">
           <label>Server URL</label>

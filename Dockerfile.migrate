@@ -5,4 +5,4 @@ RUN go install github.com/pressly/goose/v3/cmd/goose@v3.22.1
 
 WORKDIR /app
 
-ENTRYPOINT ["goose", "-dir", "/app/db/migrations", "postgres", "host=chatter-postgres port=5432 user=postgres password=password dbname=postgres sslmode=disable"]
+ENTRYPOINT ["goose", "-dir", "/app/migrations", "postgres", "host=chatter-postgres port=5432 user=postgres password=password dbname=postgres sslmode=disable"]

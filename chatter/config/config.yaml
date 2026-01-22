@@ -13,3 +13,10 @@ postgres:
   database: postgres
   min_conns: 1
   max_conns: 100
+
+redis:
+  host: redis
+  port: 6379
+  username: default
+  password: password
+  db: 0

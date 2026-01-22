@@ -3,6 +3,7 @@ package handler
 import (
 	"chatter/internal/domain"
 	"chatter/internal/usecase"
+	"chatter/pkg/middleware"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -20,6 +21,7 @@ type AuthService interface {
 	Register(ctx context.Context, username, password, deviceID string) (*domain.User, string, string, error)
 	Login(ctx context.Context, username, password, deviceID string) (string, string, *domain.User, error)
 	RefreshTokens(ctx context.Context, refreshToken string) (string, string, *domain.User, error)
+	ListActiveSessions(ctx context.Context, userID uint64) ([]domain.RefreshToken, error)
 }
 
 func NewHandler(service AuthService, logger *zap.Logger) *Handler {
@@ -38,6 +40,13 @@ type authResponse struct {
 	ID       uint64 `json:"id,omitempty"`
 	Token    string `json:"token"`
 	Username string `json:"username,omitempty"`
+}
+
+type sessionResponse struct {
+	ID        string    `json:"id"`
+	DeviceID  string    `json:"deviceId"`
+	ExpiresAt time.Time `json:"expiresAt"`
+	LastSeen  time.Time `json:"lastSeen"`
 }
 
 func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
@@ -65,6 +74,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	h.logger.Info("User registered", zap.String("username", user.Username), zap.Uint64("userID", user.ID))
 
 	h.setRefreshCookie(w, refreshToken)
+
 	writeJSON(w, authResponse{
 		ID:       user.ID,
 		Token:    accessToken,
@@ -100,6 +110,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	h.logger.Info("User logged in", zap.String("username", user.Username), zap.Uint64("userID", user.ID))
 
 	h.setRefreshCookie(w, refreshToken)
+
 	writeJSON(w, authResponse{
 		ID:       user.ID,
 		Token:    accessToken,
@@ -146,6 +157,33 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 		Token:    accessToken,
 		Username: user.Username,
 	})
+}
+
+func (h *Handler) Sessions(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok || userID == 0 {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	sessions, err := h.service.ListActiveSessions(r.Context(), userID)
+	if err != nil {
+		h.logger.Error("Failed to list sessions", zap.Error(err))
+		http.Error(w, "failed to list sessions", http.StatusInternalServerError)
+		return
+	}
+
+	response := make([]sessionResponse, 0, len(sessions))
+	for _, session := range sessions {
+		response = append(response, sessionResponse{
+			ID:        session.ID,
+			DeviceID:  session.DeviceID,
+			ExpiresAt: session.ExpiresAt,
+			LastSeen:  session.UpdatedAt,
+		})
+	}
+
+	writeJSON(w, response)
 }
 
 func (h *Handler) setRefreshCookie(w http.ResponseWriter, refreshToken string) {
