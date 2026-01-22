@@ -2,6 +2,7 @@ package telemetry
 
 import (
 	"context"
+	"fmt"
 	"net/url"
 	"os"
 
@@ -68,8 +69,12 @@ func normalizeEndpoint(raw string) (string, error) {
 	}
 
 	parsed, err := url.Parse(raw)
-	if err != nil || parsed.Host == "" {
-		return raw, err
+	if err != nil {
+		return "", err
+	}
+
+	if parsed.Host == "" {
+		return "", fmt.Errorf("missing host in endpoint: %q", raw)
 	}
 
 	return parsed.Host, nil
