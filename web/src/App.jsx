@@ -9,8 +9,7 @@ import {
   useParams,
 } from "react-router-dom";
 
-const API_BASE =
-  import.meta.env.VITE_API_URL || `${window.location.origin}/api`;
+const API_BASE = "http://localhost:8080";
 const ICE_SERVERS = [
   { urls: "stun:stun.l.google.com:19302" },
   ...(import.meta.env.VITE_TURN_URL
