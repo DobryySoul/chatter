@@ -1,7 +1,7 @@
 package config
 
 import (
-	"chatter/pkg/postgres"
+	"chatter/chatter/pkg/postgres"
 	"os"
 	"time"
 
