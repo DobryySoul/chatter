@@ -55,12 +55,3 @@ func (r *responseRecorder) Push(target string, opts *http.PushOptions) error {
 
 	return pusher.Push(target, opts)
 }
-
-func (r *responseRecorder) CloseNotify() <-chan bool {
-	if notifier, ok := r.ResponseWriter.(http.CloseNotifier); ok {
-		return notifier.CloseNotify()
-	}
-
-	ch := make(chan bool, 1)
-	return ch
-}
